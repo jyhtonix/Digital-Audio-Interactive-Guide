@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digital Sound Lab — p5.js</title>
+
+  <!-- p5.js core only — audio handled by Web Audio API -->
+  <script src="https://unpkg.com/p5@1.9.4/lib/p5.min.js"></script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg:      #0d0d0f;
+      --panel:   #16161a;
+      --border:  #2a2a35;
+      --accent:  #00e5ff;
+      --accent2: #ff4f7b;
+      --green:   #39ff8a;
+      --text:    #e8e8f0;
+      --muted:   #6b6b80;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem 4rem;
+    }
+
+    header { text-align: center; margin-bottom: 2.5rem; }
+    header h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header p {
+      margin-top: .4rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: .75rem;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .wrapper {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      width: 100%;
+      max-width: 1100px;
+    }
+    @media (max-width: 720px) { .wrapper { grid-template-columns: 1fr; } }
+
+    .canvas-card {
+      grid-column: 1 / -1;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+    }
+    #canvas-holder canvas { display: block; }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.4rem;
+      display: flex;
+      flex-direction: column;
+      gap: .9rem;
+    }
+    .card h2 {
+      font-size: .85rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .card .desc {
+      font-family: 'Space Mono', monospace;
+      font-size: .72rem;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+    .card .desc code {
+      color: var(--accent);
+      background: rgba(0,229,255,.08);
+      padding: .1em .3em;
+      border-radius: 3px;
+    }
+
+    .btn-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+    button {
+      cursor: pointer;
+      font-family: 'Space Mono', monospace;
+      font-size: .78rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 8px;
+      padding: .5rem 1.1rem;
+      transition: transform .1s;
+    }
+    button:active { transform: scale(.95); }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-play  { background: var(--green);   color: #000; }
+    .btn-loop  { background: var(--accent);  color: #000; }
+    .btn-pause { background: var(--accent2); color: #fff; }
+    .btn-stop  { background: #333;           color: #fff; }
+
+    label.slider-label {
+      font-family: 'Space Mono', monospace;
+      font-size: .72rem;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: .4rem;
+    }
+    label.slider-label span { color: var(--text); font-weight: 700; }
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%; height: 6px;
+      border-radius: 3px;
+      background: var(--border);
+      outline: none;
+      cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+    }
+
+    #status-badge {
+      font-family: 'Space Mono', monospace;
+      font-size: .72rem;
+      padding: .28rem .75rem;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--muted);
+      transition: all .3s;
+      align-self: flex-start;
+    }
+    #status-badge.playing { color: var(--green);   border-color: var(--green);   background: rgba(57,255,138,.07); }
+    #status-badge.paused  { color: var(--accent2); border-color: var(--accent2); background: rgba(255,79,123,.07); }
+
+    .keys-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+    .key-chip {
+      font-family: 'Space Mono', monospace;
+      font-size: .75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .32rem .65rem;
+      color: var(--muted);
+      transition: all .15s;
+    }
+    .key-chip.active { background: var(--accent); color: #000; border-color: var(--accent); }
+
+    .info-bar {
+      grid-column: 1 / -1;
+      font-family: 'Space Mono', monospace;
+      font-size: .68rem;
+      color: var(--muted);
+      text-align: center;
+      padding: .5rem;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Overlay ── */
+    #unlock-overlay {
+      position: fixed; inset: 0;
+      background: rgba(13,13,15,.97);
+      backdrop-filter: blur(10px);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 1.6rem;
+      z-index: 100;
+      padding: 2rem;
+    }
+    #unlock-overlay h2 {
+      font-size: 1.8rem; font-weight: 800;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    #unlock-overlay p {
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: .78rem;
+      text-align: center;
+      max-width: 360px;
+      line-height: 1.7;
+    }
+
+    /* File picker area */
+    .file-drop {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+      border: 1px dashed var(--border);
+      border-radius: 14px;
+      padding: 2rem 2.5rem;
+      width: 100%;
+      max-width: 380px;
+      transition: border-color .2s;
+    }
+    .file-drop:hover { border-color: var(--accent); }
+    .file-drop svg { opacity: .5; }
+
+    .file-drop p {
+      font-family: 'Space Mono', monospace;
+      font-size: .75rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* Hidden real input, styled button triggers it */
+    #file-input { display: none; }
+
+    #pick-btn {
+      font-size: .85rem; padding: .7rem 1.8rem;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #000; font-weight: 800;
+      font-family: 'Syne', sans-serif;
+      cursor: pointer; border: none;
+      transition: transform .15s;
+    }
+    #pick-btn:hover { transform: scale(1.04); }
+
+    #file-name {
+      font-family: 'Space Mono', monospace;
+      font-size: .75rem;
+      color: var(--accent);
+      display: none;
+      text-align: center;
+      word-break: break-all;
+      max-width: 340px;
+    }
+
+    #load-msg {
+      font-family: 'Space Mono', monospace;
+      font-size: .78rem;
+      color: var(--accent);
+      display: none;
+    }
+    #error-msg {
+      font-family: 'Space Mono', monospace;
+      font-size: .78rem;
+      color: var(--accent2);
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Overlay — pick a local MP3 file -->
+<div id="unlock-overlay">
+  <h2>🎧 Digital Sound Lab</h2>
+  <p>
+    Browsers cannot access local files directly.<br>
+    Please select your <strong>Dream.mp3</strong> (or any MP3) using the button below.
+  </p>
+
+  <div class="file-drop">
+    <!-- Folder icon -->
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5">
+      <path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>
+    </svg>
+
+    <p>Select an MP3 / WAV / OGG file from your computer</p>
+
+    <!-- Hidden file input — accepts audio files only -->
+    <input type="file" id="file-input" accept="audio/*" />
+    <button id="pick-btn" onclick="document.getElementById('file-input').click()">
+      📂 Browse Files
+    </button>
+
+    <span id="file-name"></span>
+  </div>
+
+  <span id="load-msg">⏳ Decoding audio…</span>
+  <span id="error-msg"></span>
+</div>
+
+<header>
+  <h1>Digital Sound Lab</h1>
+  <p>p5.sound interactive guide &nbsp;·&nbsp; Topic 13</p>
+</header>
+
+<div class="wrapper">
+  <div class="canvas-card" id="canvas-holder"></div>
+
+  <!-- Playback Controls — Slides 5 & 6 -->
+  <div class="card">
+    <h2>▶ Playback Control</h2>
+    <p class="desc">
+      <code>.play()</code> plays once · <code>.loop()</code> plays continuously ·
+      <code>.pause()</code> holds position · <code>.stop()</code> rewinds ·
+      <code>.isPlaying()</code> returns true/false
+    </p>
+    <div id="status-badge">⏹ Stopped</div>
+    <div class="btn-row">
+      <button class="btn-play"  id="btn-play" >▶ Play</button>
+      <button class="btn-loop"  id="btn-loop" >↻ Loop</button>
+      <button class="btn-pause" id="btn-pause">⏸ Pause</button>
+      <button class="btn-stop"  id="btn-stop" >⏹ Stop</button>
+    </div>
+  </div>
+
+  <!-- Volume & Rate — Slides 7 & 8 -->
+  <div class="card">
+    <h2>🎚 Volume &amp; Playback Rate</h2>
+    <p class="desc">
+      <code>setVolume(0–1)</code> controls amplitude.
+      <code>.rate()</code> changes speed &amp; pitch — 1.0 is normal,
+      &gt;1.0 speeds up (higher pitch), &lt;1.0 slows down (lower pitch).
+    </p>
+    <label class="slider-label">Volume — <span id="vol-val">0.80</span>
+      <input type="range" id="vol-slider" min="0" max="1" step="0.01" value="0.8" />
+    </label>
+    <label class="slider-label">Playback Rate — <span id="rate-val">1.00</span>×
+      <input type="range" id="rate-slider" min="0.5" max="2.0" step="0.05" value="1.0" />
+    </label>
+  </div>
+
+  <!-- Keyboard Soundboard — Slide 9 -->
+  <div class="card">
+    <h2>⌨ Keyboard Soundboard</h2>
+    <p class="desc">
+      <code>keyPressed()</code> checks the <code>key</code> variable to trigger sounds.
+      <code>mousePressed()</code> fires a one-shot play on canvas click.
+    </p>
+    <div class="keys-row">
+      <div class="key-chip" id="key-p">P — Play / Pause</div>
+      <div class="key-chip" id="key-s">S — Stop</div>
+      <div class="key-chip" id="key-click">🖱 Canvas click — Play</div>
+    </div>
+  </div>
+
+  <!-- Amplitude — Slides 10 & 11 -->
+  <div class="card">
+    <h2>🔊 Amplitude Visualizer</h2>
+    <p class="desc">
+      An <code>AnalyserNode</code> measures sound level each frame (equivalent to
+      <code>p5.Amplitude</code> + <code>amp.getLevel()</code>).
+      The circle and bars react to the music in real time.
+    </p>
+  </div>
+
+  <div class="info-bar" id="info-bar">
+    No file loaded &nbsp;·&nbsp; Topic 13 — Digital Sound Lab with p5.js
+  </div>
+</div>
+
+<script>
+// ================================================================
+// Web Audio API — mirrors every p5.sound concept from Topic 13
+// ================================================================
+
+let audioCtx    = null;
+let audioBuffer = null;
+let source      = null;
+let gainNode    = null;
+let analyser    = null;
+let analyserData;
+
+let isPlaying   = false;
+let isPaused    = false;
+let looping     = false;
+let pauseOffset = 0;
+let startedAt   = 0;
+let volume      = 0.8;
+let rate        = 1.0;
+
+// ── Initialise AudioContext + nodes ─────────────────────────────
+function initAudioContext() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  gainNode = audioCtx.createGain();
+  gainNode.gain.value = volume;
+
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  analyserData = new Uint8Array(analyser.fftSize);
+
+  gainNode.connect(analyser);
+  analyser.connect(audioCtx.destination);
+}
+
+// ── Load from File object (FileReader → ArrayBuffer → decode) ───
+function loadFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const decoded = await audioCtx.decodeAudioData(e.target.result);
+        resolve(decoded);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ── Create a fresh BufferSourceNode (needed for every play) ─────
+function createSource(loop) {
+  const src = audioCtx.createBufferSource();
+  src.buffer = audioBuffer;
+  src.loop   = loop;
+  src.playbackRate.value = rate;
+  src.connect(gainNode);
+  src.onended = () => {
+    if (!src._stopped) {
+      isPlaying   = false;
+      isPaused    = false;
+      pauseOffset = 0;
+    }
+  };
+  return src;
+}
+
+// ── .play() ─────────────────────────────────────────────────────
+function soundPlay() {
+  if (!audioBuffer) return;
+  soundStop();
+  looping = false;
+  source  = createSource(false);
+  source.start(0, pauseOffset);
+  startedAt   = audioCtx.currentTime - pauseOffset;
+  pauseOffset = 0;
+  isPlaying   = true;
+  isPaused    = false;
+}
+
+// ── .loop() ─────────────────────────────────────────────────────
+function soundLoop() {
+  if (!audioBuffer) return;
+  soundStop();
+  looping = true;
+  source  = createSource(true);
+  source.start(0, pauseOffset);
+  startedAt   = audioCtx.currentTime - pauseOffset;
+  pauseOffset = 0;
+  isPlaying   = true;
+  isPaused    = false;
+}
+
+// ── .pause() ────────────────────────────────────────────────────
+function soundPause() {
+  if (!isPlaying || !source) return;
+  pauseOffset = (audioCtx.currentTime - startedAt) % audioBuffer.duration;
+  source._stopped = true;
+  source.stop();
+  isPlaying = false;
+  isPaused  = true;
+}
+
+// ── .stop() ─────────────────────────────────────────────────────
+function soundStop() {
+  if (source) {
+    source._stopped = true;
+    try { source.stop(); } catch(e) {}
+    source = null;
+  }
+  isPlaying   = false;
+  isPaused    = false;
+  pauseOffset = 0;
+}
+
+// ── setVolume() ─────────────────────────────────────────────────
+function soundSetVolume(v) {
+  volume = v;
+  if (gainNode) gainNode.gain.value = v;
+}
+
+// ── .rate() ─────────────────────────────────────────────────────
+function soundSetRate(r) {
+  rate = r;
+  if (source) source.playbackRate.value = r;
+}
+
+// ── amp.getLevel() — RMS amplitude 0–1 ─────────────────────────
+function getLevel() {
+  if (!analyser) return 0;
+  analyser.getByteTimeDomainData(analyserData);
+  let sum = 0;
+  for (let i = 0; i < analyserData.length; i++) {
+    const v = (analyserData[i] - 128) / 128;
+    sum += v * v;
+  }
+  return Math.sqrt(sum / analyserData.length);
+}
+
+// ================================================================
+// p5.js sketch — global mode
+// ================================================================
+function setup() {
+  let cnv = createCanvas(700, 280);
+  cnv.parent('canvas-holder');
+}
+
+function draw() {
+  background(22, 22, 26);
+
+  // Slide 11 — getLevel() → map to circle size
+  let level = getLevel();
+  let size  = map(level, 0, 0.3, 10, 220);
+  size = constrain(size, 10, 220);
+
+  let cx = width / 2, cy = height / 2;
+
+  // Glow rings
+  noFill();
+  for (let r = 3; r > 0; r--) {
+    stroke(0, 229, 255, 22 * r);
+    strokeWeight(1);
+    ellipse(cx, cy, size * (1 + r * 0.28), size * (1 + r * 0.28));
+  }
+
+  // Main circle — Slide 11
+  noStroke(); fill(100, 250, 180);
+  ellipse(cx, cy, size, size);
+
+  // Waveform bars
+  let bars = 48, bw = width / bars;
+  for (let i = 0; i < bars; i++) {
+    let h    = map(level, 0, 0.3, 2, height * 0.38);
+    let wave = sin(frameCount * 0.08 + i * 0.35) * h * 0.45 + h * 0.55;
+    noStroke(); fill(0, 229, 255, 140);
+    rect(i * bw + 1, height - wave - 2, bw - 2, constrain(wave, 1, height), 2);
+  }
+
+  // Slide 12 — volume feedback bar
+  let barLen = map(volume, 0, 1, 0, width - 40);
+  noStroke();
+  fill(255, 79, 123, 40);  rect(20, 10, width - 40, 6, 3);
+  fill(255, 79, 123);      rect(20, 10, max(barLen, 0), 6, 3);
+
+  updateBadge();
+}
+
+// Slide 5 — mousePressed: play on canvas click
+function mousePressed() {
+  if (!audioBuffer) return;
+  if (mouseX >= 0 && mouseX <= width && mouseY >= 0 && mouseY <= height) {
+    soundPlay();
+    flashKey('key-click');
+  }
+}
+
+// Slide 9 — keyPressed: keyboard soundboard
+function keyPressed() {
+  if (!audioBuffer) return;
+  if (key === 'p' || key === 'P') {
+    isPlaying ? soundPause() : soundLoop();
+    flashKey('key-p');
+  }
+  if (key === 's' || key === 'S') {
+    soundStop();
+    flashKey('key-s');
+  }
+}
+
+// ── Helpers ──────────────────────────────────────────────────────
+function flashKey(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('active');
+  setTimeout(() => el.classList.remove('active'), 220);
+}
+
+function updateBadge() {
+  const badge = document.getElementById('status-badge');
+  if (!badge) return;
+  if (isPlaying) {
+    badge.className = 'playing'; badge.textContent = '▶ Playing';
+  } else if (isPaused) {
+    badge.className = 'paused';  badge.textContent = '⏸ Paused';
+  } else {
+    badge.className = 'stopped'; badge.textContent = '⏹ Stopped';
+  }
+}
+
+// ── File input handler ───────────────────────────────────────────
+document.getElementById('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const nameEl  = document.getElementById('file-name');
+  const loadMsg = document.getElementById('load-msg');
+  const errMsg  = document.getElementById('error-msg');
+  const pickBtn = document.getElementById('pick-btn');
+
+  nameEl.textContent  = '📄 ' + file.name;
+  nameEl.style.display = 'block';
+  loadMsg.style.display = 'block';
+  errMsg.style.display  = 'none';
+  pickBtn.disabled = true;
+
+  try {
+    initAudioContext();           // create AudioContext on user gesture
+    soundStop();                  // stop any previous sound
+    audioBuffer = await loadFromFile(file);
+
+    // Update info bar with filename
+    document.getElementById('info-bar').textContent =
+      '🎵 ' + file.name + '  ·  Topic 13 — Digital Sound Lab with p5.js';
+
+    // Hide overlay and wire up controls
+    document.getElementById('unlock-overlay').style.display = 'none';
+    wireUI();
+
+  } catch (err) {
+    console.error(err);
+    errMsg.textContent   = '❌ Could not decode audio. Try another file.';
+    errMsg.style.display = 'block';
+    loadMsg.style.display = 'none';
+    pickBtn.disabled = false;
+  }
+});
+
+// ── Wire HTML controls ────────────────────────────────────────────
+function wireUI() {
+  document.getElementById('btn-play') .addEventListener('click', () => soundPlay());
+  document.getElementById('btn-loop') .addEventListener('click', () => soundLoop());
+  document.getElementById('btn-pause').addEventListener('click', () => soundPause());
+  document.getElementById('btn-stop') .addEventListener('click', () => soundStop());
+
+  // Slide 7 — volume
+  const volSlider = document.getElementById('vol-slider');
+  const volVal    = document.getElementById('vol-val');
+  soundSetVolume(0.8);
+  volSlider.addEventListener('input', () => {
+    const v = parseFloat(volSlider.value);
+    volVal.textContent = v.toFixed(2);
+    soundSetVolume(v);
+  });
+
+  // Slide 8 — playback rate
+  const rateSlider = document.getElementById('rate-slider');
+  const rateVal    = document.getElementById('rate-val');
+  rateSlider.addEventListener('input', () => {
+    const r = parseFloat(rateSlider.value);
+    rateVal.textContent = r.toFixed(2);
+    soundSetRate(r);
+  });
+}
+</script>
+</body>
+</html>
